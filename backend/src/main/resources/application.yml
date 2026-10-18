@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: hospital-management-system
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/hospital}
+    username: ${DB_USERNAME:hospital}
+    password: ${DB_PASSWORD:hospital}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-chars-minimum}
+    expiration-ms: 86400000
+
+logging:
+  level:
+    com.saishekar.hospital: INFO
+
+---
+# Dev profile runs on 8081 so it matches the Vite proxy and can sit next
+# to a second local backend (for example the Job Tracker API on 8080).
+server:
+  port: 8081
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:hospital;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+  h2:
+    console:
+      enabled: true
+logging:
+  level:
+    com.saishekar.hospital: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:hospital-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
