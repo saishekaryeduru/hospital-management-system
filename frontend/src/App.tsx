@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { session } from './api/client';
+import DoctorsPage from './pages/DoctorsPage';
 import LoginPage from './pages/LoginPage';
 import PatientsPage from './pages/PatientsPage';
 
+type View = 'patients' | 'doctors';
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean>(() => Boolean(session.token()));
+  const [view, setView] = useState<View>('patients');
 
   if (!loggedIn) {
     return <LoginPage onLoggedIn={() => setLoggedIn(true)} />;
@@ -27,8 +31,16 @@ export default function App() {
           </button>
         </div>
       </header>
+      <nav className="row" style={{ marginBottom: '0.5rem' }}>
+        <button className={view === 'patients' ? undefined : 'secondary'} onClick={() => setView('patients')}>
+          Patients
+        </button>
+        <button className={view === 'doctors' ? undefined : 'secondary'} onClick={() => setView('doctors')}>
+          Doctors &amp; Departments
+        </button>
+      </nav>
       <main>
-        <PatientsPage />
+        {view === 'patients' ? <PatientsPage /> : <DoctorsPage />}
       </main>
     </div>
   );

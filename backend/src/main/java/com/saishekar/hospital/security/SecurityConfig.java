@@ -18,21 +18,27 @@ public class SecurityConfig {
 
     // Patient records are readable by every clinical and front-desk role,
     // writable by the staff who register and update them, and deletable
-    // only by administrators. Rules live here, in one place, rather than
-    // scattered across controllers.
+    // only by administrators. The staff directory follows the same shape,
+    // except department structure is an administrator's decision alone.
+    // Rules live here, in one place, rather than scattered across
+    // controllers.
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwtFilter) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/patients/**")
+                        .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
-                        .requestMatchers(HttpMethod.POST, "/api/patients/**")
+                        .requestMatchers(HttpMethod.POST, "/api/patients/**", "/api/doctors/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST")
                         .requestMatchers(HttpMethod.PUT, "/api/patients/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "DOCTOR", "NURSE")
-                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**")
+                        .requestMatchers(HttpMethod.PUT, "/api/doctors/**")
+                            .hasAnyRole("ADMIN", "RECEPTIONIST")
+                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**", "/api/doctors/**")
+                            .hasRole("ADMIN")
+                        .requestMatchers("/api/departments/**")
                             .hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

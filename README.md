@@ -3,9 +3,9 @@
 A full-stack platform for the day-to-day work of a small hospital: staff
 sign in with role-based access, the front desk registers patients, and
 clinical staff can find and update a patient record in seconds. Patient
-registration is the first module; appointments, doctors, and billing are
-on the roadmap below and will land as separate, tested modules rather
-than one large drop.
+registration landed first; the doctor directory and departments followed
+as a separate, tested module, and appointments and billing are on the
+roadmap below rather than arriving as one large drop.
 
 The design constraint that shapes everything here is that patient data
 is sensitive. Access is not just authenticated, it is authorized per
@@ -30,6 +30,17 @@ are different questions, and the API answers them separately.
 - **Search & pagination** — the patient list is paged (20 per page) and
   searchable from one box by name fragment or phone digits, which is
   how front-desk staff actually look someone up.
+- **Departments** — the hospital's department structure, maintained by
+  administrators only. Names are unique (case-insensitively), every
+  department reports its doctor count, and a department that still has
+  doctors assigned cannot be deleted — they must be reassigned first.
+- **Doctor directory** — every doctor belongs to a department and has a
+  specialization, contact details, and an active flag (inactive doctors
+  stay listed for history but should not take new bookings). The
+  directory is paged and searchable by name or specialization, with an
+  optional department filter; both compose. Front desk and
+  administrators maintain entries; every role can read the directory;
+  only administrators can remove an entry.
 - **Consistent API errors** — one JSON error shape everywhere, with
   per-field details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API,
@@ -54,7 +65,9 @@ backend/   Spring Boot API
   ├── auth/        register/login, token issuing (role embedded)
   ├── security/    JWT filter, security config, current-user resolution
   ├── patient/     patient CRUD, search, pagination
-  ├── model/       JPA entities (User, Patient) and enums (Role, Gender, BloodGroup)
+  ├── department/  department CRUD with doctor counts and a guarded delete
+  ├── doctor/      doctor directory CRUD, search, department filter
+  ├── model/       JPA entities (User, Patient, Department, Doctor) and enums (Role, Gender, BloodGroup)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
 ```
@@ -87,6 +100,16 @@ service layer.
   allergy record (substance, reaction, severity) belongs with the
   medical-record module; baking a half-model into the patient table
   now would be the wrong schema to migrate away from later.
+- **A directory entry is not a login.** A doctor in the directory and
+  a staff account with the DOCTOR role are separate records: the
+  directory is who the hospital employs and how to reach them, the
+  account is who may sign in. Linking the two belongs with the
+  appointments module, which is the first place the link matters.
+- **Guards return conflicts, not silent failures.** Deleting a
+  department with doctors still assigned, reusing a department name,
+  or adding a second doctor with the same email all return 409 with
+  an explanation, because each would quietly corrupt the directory
+  that appointments will be booked against.
 - **One origin in every environment.** In development the Vite server
   proxies `/api` to the backend; in the Compose stack nginx does the
   same job. The frontend always calls relative paths, so there is no
@@ -156,10 +179,18 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/patients` | ADMIN, RECEPTIONIST | Register a patient |
 | PUT | `/api/patients/{id}` | ADMIN, RECEPTIONIST, DOCTOR, NURSE | Update a patient record |
 | DELETE | `/api/patients/{id}` | ADMIN | Delete a patient record |
+| GET | `/api/departments` | all roles | List departments in name order, each with its doctor count |
+| POST | `/api/departments` | ADMIN | Create a department (name must be unique, case-insensitive) |
+| PUT | `/api/departments/{id}` | ADMIN | Rename or redescribe a department |
+| DELETE | `/api/departments/{id}` | ADMIN | Delete a department (409 while doctors are still assigned) |
+| GET | `/api/doctors?q=cardio&departmentId=2&page=0&size=20` | all roles | List doctors, paged; optional search over name/specialization, composable with the department filter |
+| GET | `/api/doctors/{id}` | all roles | Get one doctor |
+| POST | `/api/doctors` | ADMIN, RECEPTIONIST | Add a doctor (department must exist, email must be unique) |
+| PUT | `/api/doctors/{id}` | ADMIN, RECEPTIONIST | Update a doctor, including the active flag |
+| DELETE | `/api/doctors/{id}` | ADMIN | Remove a doctor from the directory |
 
 ## Roadmap
 
-- Doctor directory and department management
 - Appointments: scheduling against a doctor, status lifecycle, day views
 - Medical records: visits, diagnoses, prescriptions (structured allergies)
 - Billing: invoice per visit, payment status tracking

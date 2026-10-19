@@ -59,6 +59,48 @@ export interface PatientPage {
   totalPages: number;
 }
 
+export interface Department {
+  id: number;
+  name: string;
+  description: string | null;
+  doctorCount: number;
+}
+
+export interface DepartmentPayload {
+  name: string;
+  description?: string;
+}
+
+export interface Doctor {
+  id: number;
+  firstName: string;
+  lastName: string;
+  specialization: string;
+  departmentId: number;
+  departmentName: string;
+  phone: string;
+  email: string;
+  active: boolean;
+}
+
+export interface DoctorPayload {
+  firstName: string;
+  lastName: string;
+  specialization: string;
+  departmentId: number;
+  phone: string;
+  email: string;
+  active: boolean;
+}
+
+export interface DoctorPage {
+  content: Doctor[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface AuthResponse {
   token: string;
   email: string;
@@ -135,4 +177,33 @@ export const api = {
 
   deletePatient: (id: number) =>
     request<void>(`/api/patients/${id}`, { method: 'DELETE' }),
+
+  listDepartments: () => request<Department[]>('/api/departments'),
+
+  createDepartment: (payload: DepartmentPayload) =>
+    request<Department>('/api/departments', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateDepartment: (id: number, payload: DepartmentPayload) =>
+    request<Department>(`/api/departments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteDepartment: (id: number) =>
+    request<void>(`/api/departments/${id}`, { method: 'DELETE' }),
+
+  listDoctors: (query = '', departmentId: number | null = null, page = 0, size = 20) => {
+    const search = new URLSearchParams();
+    if (query.trim()) search.set('q', query.trim());
+    if (departmentId !== null) search.set('departmentId', String(departmentId));
+    search.set('page', String(page));
+    search.set('size', String(size));
+    return request<DoctorPage>(`/api/doctors?${search.toString()}`);
+  },
+
+  createDoctor: (payload: DoctorPayload) =>
+    request<Doctor>('/api/doctors', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateDoctor: (id: number, payload: DoctorPayload) =>
+    request<Doctor>(`/api/doctors/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteDoctor: (id: number) =>
+    request<void>(`/api/doctors/${id}`, { method: 'DELETE' }),
 };
