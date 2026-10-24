@@ -4,7 +4,8 @@ A full-stack platform for the day-to-day work of a small hospital: staff
 sign in with role-based access, the front desk registers patients, and
 clinical staff can find and update a patient record in seconds. Patient
 registration landed first; the doctor directory and departments followed
-as a separate, tested module, and appointments and billing are on the
+as a separate, tested module, then appointments — scheduling, overlap
+protection, and the visit lifecycle — as the next. Billing is on the
 roadmap below rather than arriving as one large drop.
 
 The design constraint that shapes everything here is that patient data
@@ -41,6 +42,16 @@ are different questions, and the API answers them separately.
   optional department filter; both compose. Front desk and
   administrators maintain entries; every role can read the directory;
   only administrators can remove an entry.
+- **Appointments** — the front desk books a patient against a doctor for
+  a start time and a duration (30 minutes by default, 5–240 accepted).
+  A booking that overlaps one of the doctor's live appointments is a
+  409, not a double-booked clinic; back-to-back appointments are fine.
+  Inactive doctors take no new bookings, bookings cannot be made in the
+  past, and the day view lists one day's appointments in time order,
+  composable with doctor, patient, and status filters. The lifecycle is
+  enforced server-side: SCHEDULED → CHECKED_IN → COMPLETED, with
+  CANCELLED and NO_SHOW as terminal outs — a booking cannot be completed
+  before check-in, and cancelling frees the slot for rebooking.
 - **Consistent API errors** — one JSON error shape everywhere, with
   per-field details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API,
@@ -67,16 +78,17 @@ backend/   Spring Boot API
   ├── patient/     patient CRUD, search, pagination
   ├── department/  department CRUD with doctor counts and a guarded delete
   ├── doctor/      doctor directory CRUD, search, department filter
-  ├── model/       JPA entities (User, Patient, Department, Doctor) and enums (Role, Gender, BloodGroup)
+  ├── appointment/ appointment booking, overlap check, status lifecycle, day views
+  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment) and enums (Role, Gender, BloodGroup, AppointmentStatus)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
 ```
 
 The backend is a layered monolith on purpose: controllers stay thin,
 services own the rules, repositories are the only code that talks to
-JPA. Each clinical/administrative module (patients today; appointments,
-billing next) gets its own package rather than growing a shared
-service layer.
+JPA. Each clinical/administrative module (patients, doctors,
+appointments today; billing next) gets its own package rather than
+growing a shared service layer.
 
 ## Design decisions
 
@@ -103,13 +115,29 @@ service layer.
 - **A directory entry is not a login.** A doctor in the directory and
   a staff account with the DOCTOR role are separate records: the
   directory is who the hospital employs and how to reach them, the
-  account is who may sign in. Linking the two belongs with the
-  appointments module, which is the first place the link matters.
+  account is who may sign in. Appointments book against the directory
+  entry, because the front desk books for every doctor, signed in or
+  not; linking an entry to an account only becomes necessary if a
+  doctor's view is ever scoped to their own schedule.
 - **Guards return conflicts, not silent failures.** Deleting a
   department with doctors still assigned, reusing a department name,
   or adding a second doctor with the same email all return 409 with
   an explanation, because each would quietly corrupt the directory
-  that appointments will be booked against.
+  that appointments are booked against.
+- **An appointment's end is derived, never stored.** The record keeps
+  a start and a duration; the overlap check compares half-open
+  intervals ([start, start + duration)), so back-to-back bookings
+  share a boundary without colliding, and a reschedule can never
+  leave a stored end disagreeing with the start. Only SCHEDULED and
+  CHECKED_IN appointments block a calendar — a cancellation or a
+  no-show frees the slot immediately, which is what the front desk
+  expects when a patient calls to cancel and someone else books in.
+- **Appointment days are UTC days.** Start times are instants, and a
+  day view is the half-open UTC range for the requested date, so a
+  booking at exactly midnight belongs to exactly one day and every
+  client sees the same schedule. A multi-site hospital spanning time
+  zones would key the view to the site's zone instead; for one site
+  the UTC rule is the simpler contract to reason about.
 - **One origin in every environment.** In development the Vite server
   proxies `/api` to the backend; in the Compose stack nginx does the
   same job. The frontend always calls relative paths, so there is no
@@ -188,10 +216,15 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/doctors` | ADMIN, RECEPTIONIST | Add a doctor (department must exist, email must be unique) |
 | PUT | `/api/doctors/{id}` | ADMIN, RECEPTIONIST | Update a doctor, including the active flag |
 | DELETE | `/api/doctors/{id}` | ADMIN | Remove a doctor from the directory |
+| GET | `/api/appointments?date=2026-11-02&doctorId=2&page=0&size=20` | all roles | List appointments, soonest first; optional UTC day view, doctor / patient / status filters |
+| GET | `/api/appointments/{id}` | all roles | Get one appointment |
+| POST | `/api/appointments` | ADMIN, RECEPTIONIST | Book an appointment (409 on overlap or inactive doctor, 400 on dangling patient/doctor or a past start) |
+| PUT | `/api/appointments/{id}` | ADMIN, RECEPTIONIST | Reschedule or edit a SCHEDULED appointment |
+| PATCH | `/api/appointments/{id}/status` | all roles | Move through the lifecycle: SCHEDULED → CHECKED_IN → COMPLETED, or CANCELLED / NO_SHOW |
+| DELETE | `/api/appointments/{id}` | ADMIN | Delete an appointment record |
 
 ## Roadmap
 
-- Appointments: scheduling against a doctor, status lifecycle, day views
 - Medical records: visits, diagnoses, prescriptions (structured allergies)
 - Billing: invoice per visit, payment status tracking
 - Dashboard: today's appointments, admission counts, department load

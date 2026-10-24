@@ -101,6 +101,49 @@ export interface DoctorPage {
   totalPages: number;
 }
 
+export type AppointmentStatus = 'SCHEDULED' | 'CHECKED_IN' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+export const APPOINTMENT_STATUSES: AppointmentStatus[] = [
+  'SCHEDULED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'NO_SHOW',
+];
+
+export function formatAppointmentStatus(status: AppointmentStatus): string {
+  return status
+    .toLowerCase()
+    .replace(/(^|_)(\w)/g, (_match, _sep: string, ch: string) => ` ${ch.toUpperCase()}`)
+    .trim();
+}
+
+export interface Appointment {
+  id: number;
+  patientId: number;
+  patientName: string;
+  doctorId: number;
+  doctorName: string;
+  departmentId: number;
+  departmentName: string;
+  startsAt: string;
+  durationMinutes: number;
+  endsAt: string;
+  reason: string | null;
+  status: AppointmentStatus;
+}
+
+export interface AppointmentPayload {
+  patientId: number;
+  doctorId: number;
+  startsAt: string;
+  durationMinutes?: number;
+  reason?: string;
+}
+
+export interface AppointmentPage {
+  content: Appointment[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface AuthResponse {
   token: string;
   email: string;
@@ -206,4 +249,34 @@ export const api = {
 
   deleteDoctor: (id: number) =>
     request<void>(`/api/doctors/${id}`, { method: 'DELETE' }),
+
+  listAppointments: (
+    filters: { date?: string; doctorId?: number | null; patientId?: number | null; status?: AppointmentStatus | '' } = {},
+    page = 0,
+    size = 20,
+  ) => {
+    const search = new URLSearchParams();
+    if (filters.date) search.set('date', filters.date);
+    if (filters.doctorId != null) search.set('doctorId', String(filters.doctorId));
+    if (filters.patientId != null) search.set('patientId', String(filters.patientId));
+    if (filters.status) search.set('status', filters.status);
+    search.set('page', String(page));
+    search.set('size', String(size));
+    return request<AppointmentPage>(`/api/appointments?${search.toString()}`);
+  },
+
+  createAppointment: (payload: AppointmentPayload) =>
+    request<Appointment>('/api/appointments', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateAppointment: (id: number, payload: AppointmentPayload) =>
+    request<Appointment>(`/api/appointments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  updateAppointmentStatus: (id: number, status: AppointmentStatus) =>
+    request<Appointment>(`/api/appointments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  deleteAppointment: (id: number) =>
+    request<void>(`/api/appointments/${id}`, { method: 'DELETE' }),
 };

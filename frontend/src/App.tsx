@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { session } from './api/client';
+import AppointmentsPage from './pages/AppointmentsPage';
 import DoctorsPage from './pages/DoctorsPage';
 import LoginPage from './pages/LoginPage';
 import PatientsPage from './pages/PatientsPage';
 
-type View = 'patients' | 'doctors';
+type View = 'patients' | 'doctors' | 'appointments';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean>(() => Boolean(session.token()));
@@ -38,9 +39,14 @@ export default function App() {
         <button className={view === 'doctors' ? undefined : 'secondary'} onClick={() => setView('doctors')}>
           Doctors &amp; Departments
         </button>
+        <button className={view === 'appointments' ? undefined : 'secondary'} onClick={() => setView('appointments')}>
+          Appointments
+        </button>
       </nav>
       <main>
-        {view === 'patients' ? <PatientsPage /> : <DoctorsPage />}
+        {view === 'patients' && <PatientsPage />}
+        {view === 'doctors' && <DoctorsPage />}
+        {view === 'appointments' && <AppointmentsPage />}
       </main>
     </div>
   );

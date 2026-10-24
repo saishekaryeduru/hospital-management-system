@@ -20,6 +20,10 @@ public class SecurityConfig {
     // writable by the staff who register and update them, and deletable
     // only by administrators. The staff directory follows the same shape,
     // except department structure is an administrator's decision alone.
+    // Appointments split one step further: the front desk books and
+    // reschedules them, but every role that works a clinic session can
+    // move one through its status lifecycle (check-in, completion,
+    // no-show), because that happens at the point of care, not the desk.
     // Rules live here, in one place, rather than scattered across
     // controllers.
     @Bean
@@ -28,15 +32,17 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**")
+                        .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
-                        .requestMatchers(HttpMethod.POST, "/api/patients/**", "/api/doctors/**")
+                        .requestMatchers(HttpMethod.POST, "/api/patients/**", "/api/doctors/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST")
                         .requestMatchers(HttpMethod.PUT, "/api/patients/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "DOCTOR", "NURSE")
-                        .requestMatchers(HttpMethod.PUT, "/api/doctors/**")
+                        .requestMatchers(HttpMethod.PUT, "/api/doctors/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST")
-                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**", "/api/doctors/**")
+                        .requestMatchers(HttpMethod.PATCH, "/api/appointments/**")
+                            .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
+                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**", "/api/doctors/**", "/api/appointments/**")
                             .hasRole("ADMIN")
                         .requestMatchers("/api/departments/**")
                             .hasRole("ADMIN")
