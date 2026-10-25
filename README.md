@@ -5,8 +5,10 @@ sign in with role-based access, the front desk registers patients, and
 clinical staff can find and update a patient record in seconds. Patient
 registration landed first; the doctor directory and departments followed
 as a separate, tested module, then appointments — scheduling, overlap
-protection, and the visit lifecycle — as the next. Billing is on the
-roadmap below rather than arriving as one large drop.
+protection, and the visit lifecycle — as the next, and medical records
+— the visit document itself, with diagnoses and prescriptions — after
+that. Billing is on the roadmap below rather than arriving as one
+large drop.
 
 The design constraint that shapes everything here is that patient data
 is sensitive. Access is not just authenticated, it is authorized per
@@ -52,6 +54,17 @@ are different questions, and the API answers them separately.
   enforced server-side: SCHEDULED → CHECKED_IN → COMPLETED, with
   CANCELLED and NO_SHOW as terminal outs — a booking cannot be completed
   before check-in, and cancelling frees the slot for rebooking.
+- **Medical records** — the document of a visit: attending doctor,
+  visit time, chief complaint, diagnosis, notes, and prescription
+  lines (medication, dosage, frequency, duration, instructions) kept
+  in written order. A record may link to the appointment it documents,
+  but only when that appointment is COMPLETED, belongs to the same
+  patient and doctor, and has no record yet — one record per booked
+  visit. History is paged, newest first, filterable by patient or
+  doctor, and searchable over complaint and diagnosis. Access is
+  clinical-only: doctors author records, nurses read them, and the
+  front desk — which can read demographics and the schedule — cannot
+  read a diagnosis at all.
 - **Consistent API errors** — one JSON error shape everywhere, with
   per-field details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API,
@@ -79,7 +92,8 @@ backend/   Spring Boot API
   ├── department/  department CRUD with doctor counts and a guarded delete
   ├── doctor/      doctor directory CRUD, search, department filter
   ├── appointment/ appointment booking, overlap check, status lifecycle, day views
-  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment) and enums (Role, Gender, BloodGroup, AppointmentStatus)
+  ├── medicalrecord/ visit records with diagnoses and prescription lines
+  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord) and enums (Role, Gender, BloodGroup, AppointmentStatus)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
 ```
@@ -87,8 +101,8 @@ backend/   Spring Boot API
 The backend is a layered monolith on purpose: controllers stay thin,
 services own the rules, repositories are the only code that talks to
 JPA. Each clinical/administrative module (patients, doctors,
-appointments today; billing next) gets its own package rather than
-growing a shared service layer.
+appointments, medical records today; billing next) gets its own
+package rather than growing a shared service layer.
 
 ## Design decisions
 
@@ -109,9 +123,9 @@ growing a shared service layer.
   phone; the repository query matches a fragment against first name,
   last name, or phone instead of asking staff to pick a search mode.
 - **Allergies are a short free-text note, for now.** A structured
-  allergy record (substance, reaction, severity) belongs with the
-  medical-record module; baking a half-model into the patient table
-  now would be the wrong schema to migrate away from later.
+  allergy record (substance, reaction, severity) is still on the
+  roadmap; baking a half-model into the patient table now would be
+  the wrong schema to migrate away from later.
 - **A directory entry is not a login.** A doctor in the directory and
   a staff account with the DOCTOR role are separate records: the
   directory is who the hospital employs and how to reach them, the
@@ -143,6 +157,26 @@ growing a shared service layer.
   same job. The frontend always calls relative paths, so there is no
   CORS configuration to keep in sync and no API URL baked into the
   bundle at build time.
+- **Medical records are the first module the front desk cannot read.**
+  Every other module is scheduling or directory data, which the desk
+  needs; a diagnosis is not. The exclusion is total (read and write)
+  rather than field-level redaction, because a redacted record still
+  leaks that a visit and a diagnosis exist.
+- **A record documents a visit that happened, not one that is
+  planned.** The visit time cannot be in the future, and the optional
+  appointment link is accepted only for a COMPLETED appointment of
+  the same patient and doctor — a scheduled or cancelled booking has
+  no outcome to document. Walk-ins carry no link; the link is
+  provenance, not a precondition.
+- **Recording a visit does not require an active doctor.** Booking
+  does, because an inactive doctor should take no new patients; the
+  chart is history, and a doctor who has since left still attended
+  the visits they attended.
+- **Prescription lines are owned by the record, not entities.**
+  A line is never read, shared, or deleted on its own, so it is an
+  embeddable kept in written order; correcting a record replaces the
+  whole list, which makes a withdrawn medication actually disappear
+  from the chart instead of lingering as an orphaned row.
 
 ## Running it locally
 
@@ -222,11 +256,16 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | PUT | `/api/appointments/{id}` | ADMIN, RECEPTIONIST | Reschedule or edit a SCHEDULED appointment |
 | PATCH | `/api/appointments/{id}/status` | all roles | Move through the lifecycle: SCHEDULED → CHECKED_IN → COMPLETED, or CANCELLED / NO_SHOW |
 | DELETE | `/api/appointments/{id}` | ADMIN | Delete an appointment record |
+| GET | `/api/medical-records?patientId=2&q=angina&page=0&size=20` | ADMIN, DOCTOR, NURSE | List medical records, newest visit first; optional patient / doctor filters and search over complaint and diagnosis |
+| GET | `/api/medical-records/{id}` | ADMIN, DOCTOR, NURSE | Get one medical record |
+| POST | `/api/medical-records` | ADMIN, DOCTOR | Record a visit (400 on dangling patient/doctor/appointment or a future visit time, 409 on a non-completed or already-documented appointment) |
+| PUT | `/api/medical-records/{id}` | ADMIN, DOCTOR | Correct a medical record; the prescription list is replaced as a whole |
+| DELETE | `/api/medical-records/{id}` | ADMIN | Delete a medical record |
 
 ## Roadmap
 
-- Medical records: visits, diagnoses, prescriptions (structured allergies)
-- Billing: invoice per visit, payment status tracking
+- Billing: invoice per completed visit, payment status tracking
+- Structured allergies: replace the free-text note on the patient record with substance / reaction / severity entries
 - Dashboard: today's appointments, admission counts, department load
 
 ## License

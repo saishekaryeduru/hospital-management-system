@@ -24,6 +24,11 @@ public class SecurityConfig {
     // reschedules them, but every role that works a clinic session can
     // move one through its status lifecycle (check-in, completion,
     // no-show), because that happens at the point of care, not the desk.
+    // Medical records are the one module the front desk cannot read at
+    // all: a diagnosis is clinical information, not scheduling
+    // information, so RECEPTIONIST is excluded from every method on
+    // them. Doctors author records; administrators can correct and
+    // remove them.
     // Rules live here, in one place, rather than scattered across
     // controllers.
     @Bean
@@ -34,15 +39,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
+                        .requestMatchers(HttpMethod.GET, "/api/medical-records/**")
+                            .hasAnyRole("ADMIN", "DOCTOR", "NURSE")
                         .requestMatchers(HttpMethod.POST, "/api/patients/**", "/api/doctors/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST")
+                        .requestMatchers(HttpMethod.POST, "/api/medical-records/**")
+                            .hasAnyRole("ADMIN", "DOCTOR")
                         .requestMatchers(HttpMethod.PUT, "/api/patients/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST", "DOCTOR", "NURSE")
                         .requestMatchers(HttpMethod.PUT, "/api/doctors/**", "/api/appointments/**")
                             .hasAnyRole("ADMIN", "RECEPTIONIST")
+                        .requestMatchers(HttpMethod.PUT, "/api/medical-records/**")
+                            .hasAnyRole("ADMIN", "DOCTOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/appointments/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
-                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**", "/api/doctors/**", "/api/appointments/**")
+                        .requestMatchers(HttpMethod.DELETE, "/api/patients/**", "/api/doctors/**", "/api/appointments/**", "/api/medical-records/**")
                             .hasRole("ADMIN")
                         .requestMatchers("/api/departments/**")
                             .hasRole("ADMIN")

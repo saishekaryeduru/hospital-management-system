@@ -144,6 +144,57 @@ export interface AppointmentPage {
   totalPages: number;
 }
 
+export interface Prescription {
+  medication: string;
+  dosage: string;
+  frequency: string;
+  durationDays: number | null;
+  instructions: string | null;
+}
+
+export interface PrescriptionPayload {
+  medication: string;
+  dosage: string;
+  frequency: string;
+  durationDays?: number;
+  instructions?: string;
+}
+
+export interface MedicalRecord {
+  id: number;
+  patientId: number;
+  patientName: string;
+  doctorId: number;
+  doctorName: string;
+  departmentId: number;
+  departmentName: string;
+  appointmentId: number | null;
+  visitAt: string;
+  chiefComplaint: string;
+  diagnosis: string;
+  notes: string | null;
+  prescriptions: Prescription[];
+}
+
+export interface MedicalRecordPayload {
+  patientId: number;
+  doctorId: number;
+  appointmentId?: number;
+  visitAt: string;
+  chiefComplaint: string;
+  diagnosis: string;
+  notes?: string;
+  prescriptions: PrescriptionPayload[];
+}
+
+export interface MedicalRecordPage {
+  content: MedicalRecord[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface AuthResponse {
   token: string;
   email: string;
@@ -279,4 +330,27 @@ export const api = {
 
   deleteAppointment: (id: number) =>
     request<void>(`/api/appointments/${id}`, { method: 'DELETE' }),
+
+  listMedicalRecords: (
+    filters: { patientId?: number | null; doctorId?: number | null; q?: string } = {},
+    page = 0,
+    size = 20,
+  ) => {
+    const search = new URLSearchParams();
+    if (filters.patientId != null) search.set('patientId', String(filters.patientId));
+    if (filters.doctorId != null) search.set('doctorId', String(filters.doctorId));
+    if (filters.q?.trim()) search.set('q', filters.q.trim());
+    search.set('page', String(page));
+    search.set('size', String(size));
+    return request<MedicalRecordPage>(`/api/medical-records?${search.toString()}`);
+  },
+
+  createMedicalRecord: (payload: MedicalRecordPayload) =>
+    request<MedicalRecord>('/api/medical-records', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateMedicalRecord: (id: number, payload: MedicalRecordPayload) =>
+    request<MedicalRecord>(`/api/medical-records/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteMedicalRecord: (id: number) =>
+    request<void>(`/api/medical-records/${id}`, { method: 'DELETE' }),
 };

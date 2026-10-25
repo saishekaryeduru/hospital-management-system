@@ -3,9 +3,10 @@ import { session } from './api/client';
 import AppointmentsPage from './pages/AppointmentsPage';
 import DoctorsPage from './pages/DoctorsPage';
 import LoginPage from './pages/LoginPage';
+import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import PatientsPage from './pages/PatientsPage';
 
-type View = 'patients' | 'doctors' | 'appointments';
+type View = 'patients' | 'doctors' | 'appointments' | 'records';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean>(() => Boolean(session.token()));
@@ -42,11 +43,19 @@ export default function App() {
         <button className={view === 'appointments' ? undefined : 'secondary'} onClick={() => setView('appointments')}>
           Appointments
         </button>
+        {/* Medical records are clinical data: the API refuses them to
+            receptionists, so the tab is not offered to that role at all. */}
+        {session.role() !== 'RECEPTIONIST' && (
+          <button className={view === 'records' ? undefined : 'secondary'} onClick={() => setView('records')}>
+            Medical Records
+          </button>
+        )}
       </nav>
       <main>
         {view === 'patients' && <PatientsPage />}
         {view === 'doctors' && <DoctorsPage />}
         {view === 'appointments' && <AppointmentsPage />}
+        {view === 'records' && <MedicalRecordsPage />}
       </main>
     </div>
   );
