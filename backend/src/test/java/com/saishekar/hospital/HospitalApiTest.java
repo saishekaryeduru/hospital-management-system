@@ -46,10 +46,13 @@ class HospitalApiTest {
     @Test
     void receptionistRegistersPatientAndDoctorCanReadIt() throws Exception {
         String receptionist = register("desk-" + System.nanoTime() + "@hospital.test", "RECEPTIONIST");
+        // The test classes share one database, so the searched name must
+        // be one no other class registers -- a common first name makes
+        // the count below depend on which classes ran before this one.
         MvcResult created = mvc.perform(post("/api/patients").header("Authorization", "Bearer " + receptionist)
-                        .contentType(MediaType.APPLICATION_JSON).content(patientJson("Asha")))
+                        .contentType(MediaType.APPLICATION_JSON).content(patientJson("Ashwini")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.firstName").value("Asha"))
+                .andExpect(jsonPath("$.firstName").value("Ashwini"))
                 .andExpect(jsonPath("$.bloodGroup").value("O_POSITIVE"))
                 .andReturn();
         long id = json.readTree(created.getResponse().getContentAsString()).get("id").asLong();
@@ -59,7 +62,7 @@ class HospitalApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lastName").value("Sharma"));
 
-        mvc.perform(get("/api/patients?q=asha").header("Authorization", "Bearer " + doctor))
+        mvc.perform(get("/api/patients?q=ashwini").header("Authorization", "Bearer " + doctor))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
