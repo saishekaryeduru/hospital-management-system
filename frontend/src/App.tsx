@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { session } from './api/client';
 import AppointmentsPage from './pages/AppointmentsPage';
+import BillingPage from './pages/BillingPage';
 import DoctorsPage from './pages/DoctorsPage';
 import LoginPage from './pages/LoginPage';
 import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import PatientsPage from './pages/PatientsPage';
 
-type View = 'patients' | 'doctors' | 'appointments' | 'records';
+type View = 'patients' | 'doctors' | 'appointments' | 'records' | 'billing';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean>(() => Boolean(session.token()));
@@ -50,12 +51,20 @@ export default function App() {
             Medical Records
           </button>
         )}
+        {/* Billing is financial data: the API refuses it to clinical
+            roles, so the tab is offered only to the desk and admins. */}
+        {(session.role() === 'ADMIN' || session.role() === 'RECEPTIONIST') && (
+          <button className={view === 'billing' ? undefined : 'secondary'} onClick={() => setView('billing')}>
+            Billing
+          </button>
+        )}
       </nav>
       <main>
         {view === 'patients' && <PatientsPage />}
         {view === 'doctors' && <DoctorsPage />}
         {view === 'appointments' && <AppointmentsPage />}
         {view === 'records' && <MedicalRecordsPage />}
+        {view === 'billing' && <BillingPage />}
       </main>
     </div>
   );

@@ -195,6 +195,61 @@ export interface MedicalRecordPage {
   totalPages: number;
 }
 
+export type InvoiceStatus = 'UNPAID' | 'PAID' | 'VOID';
+export const INVOICE_STATUSES: InvoiceStatus[] = ['UNPAID', 'PAID', 'VOID'];
+
+export function formatInvoiceStatus(status: InvoiceStatus): string {
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+// Amounts cross the API as integer cents; formatting happens here so
+// every screen renders money the same way.
+export function formatMoney(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export interface ChargeItem {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+}
+
+export interface ChargeItemPayload {
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+}
+
+export interface Invoice {
+  id: number;
+  patientId: number;
+  patientName: string;
+  appointmentId: number | null;
+  issuedAt: string;
+  notes: string | null;
+  lines: ChargeItem[];
+  totalCents: number;
+  status: InvoiceStatus;
+  paidAt: string | null;
+}
+
+export interface InvoicePayload {
+  patientId: number;
+  appointmentId?: number;
+  issuedAt: string;
+  notes?: string;
+  lines: ChargeItemPayload[];
+}
+
+export interface InvoicePage {
+  content: Invoice[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface AuthResponse {
   token: string;
   email: string;
@@ -353,4 +408,32 @@ export const api = {
 
   deleteMedicalRecord: (id: number) =>
     request<void>(`/api/medical-records/${id}`, { method: 'DELETE' }),
+
+  listInvoices: (
+    filters: { patientId?: number | null; status?: InvoiceStatus | '' } = {},
+    page = 0,
+    size = 20,
+  ) => {
+    const search = new URLSearchParams();
+    if (filters.patientId != null) search.set('patientId', String(filters.patientId));
+    if (filters.status) search.set('status', filters.status);
+    search.set('page', String(page));
+    search.set('size', String(size));
+    return request<InvoicePage>(`/api/invoices?${search.toString()}`);
+  },
+
+  createInvoice: (payload: InvoicePayload) =>
+    request<Invoice>('/api/invoices', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateInvoice: (id: number, payload: InvoicePayload) =>
+    request<Invoice>(`/api/invoices/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  updateInvoiceStatus: (id: number, status: InvoiceStatus) =>
+    request<Invoice>(`/api/invoices/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  deleteInvoice: (id: number) =>
+    request<void>(`/api/invoices/${id}`, { method: 'DELETE' }),
 };

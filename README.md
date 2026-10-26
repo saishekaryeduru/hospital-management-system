@@ -5,10 +5,10 @@ sign in with role-based access, the front desk registers patients, and
 clinical staff can find and update a patient record in seconds. Patient
 registration landed first; the doctor directory and departments followed
 as a separate, tested module, then appointments — scheduling, overlap
-protection, and the visit lifecycle — as the next, and medical records
+protection, and the visit lifecycle — as the next, medical records
 — the visit document itself, with diagnoses and prescriptions — after
-that. Billing is on the roadmap below rather than arriving as one
-large drop.
+that, and billing — an invoice per completed visit, with payment
+tracking — as the latest module.
 
 The design constraint that shapes everything here is that patient data
 is sensitive. Access is not just authenticated, it is authorized per
@@ -65,6 +65,19 @@ are different questions, and the API answers them separately.
   clinical-only: doctors author records, nurses read them, and the
   front desk — which can read demographics and the schedule — cannot
   read a diagnosis at all.
+- **Billing** — an invoice is a list of charge lines (description,
+  quantity, unit price in cents) against a patient; the total is
+  derived from the lines server-side, never sent by the client. An
+  invoice may link to the appointment it bills, but only when that
+  appointment is COMPLETED and belongs to the same patient — one
+  invoice per booked visit. The payment lifecycle is UNPAID → PAID
+  (which stamps `paidAt`) or UNPAID → VOID, and both outcomes are
+  terminal: a settled or voided invoice can no longer be edited or
+  deleted. Access is the mirror of medical records — the front desk
+  and administrators issue, read, and settle invoices, and clinical
+  roles cannot read a charge at all. The list is paged, newest issued
+  first, filterable by patient and status, so the unpaid queue is one
+  filter away.
 - **Consistent API errors** — one JSON error shape everywhere, with
   per-field details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API,
@@ -93,7 +106,8 @@ backend/   Spring Boot API
   ├── doctor/      doctor directory CRUD, search, department filter
   ├── appointment/ appointment booking, overlap check, status lifecycle, day views
   ├── medicalrecord/ visit records with diagnoses and prescription lines
-  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord) and enums (Role, Gender, BloodGroup, AppointmentStatus)
+  ├── billing/     invoices with charge lines, derived totals, payment lifecycle
+  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord, Invoice) and enums (Role, Gender, BloodGroup, AppointmentStatus, InvoiceStatus)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
 ```
@@ -101,7 +115,7 @@ backend/   Spring Boot API
 The backend is a layered monolith on purpose: controllers stay thin,
 services own the rules, repositories are the only code that talks to
 JPA. Each clinical/administrative module (patients, doctors,
-appointments, medical records today; billing next) gets its own
+appointments, medical records, billing) gets its own
 package rather than growing a shared service layer.
 
 ## Design decisions
@@ -177,6 +191,24 @@ package rather than growing a shared service layer.
   embeddable kept in written order; correcting a record replaces the
   whole list, which makes a withdrawn medication actually disappear
   from the chart instead of lingering as an orphaned row.
+- **Billing access mirrors clinical access, deliberately.** The front
+  desk is excluded from diagnoses and clinical roles are excluded
+  from charges, for the same reason in both directions: each role
+  sees the data its job needs. Separation is total rather than
+  field-level in both modules.
+- **Money is integer cents, and a total is derived, never stored.**
+  Floating-point prices accumulate rounding error exactly where an
+  invoice cannot afford it, and a stored total can disagree with its
+  lines after a correction; deriving it from the lines makes the
+  lines the single source of truth. Charge lines are embeddables
+  owned by the invoice, for the same reason prescription lines are
+  owned by the record.
+- **A paid or voided invoice is immutable.** While an invoice is
+  unpaid it can be corrected or deleted; once it settles or is
+  voided, editing it would rewrite a financial record after the
+  fact. Unwinding either outcome in a real billing office is a new
+  document — a refund, a reissue — not an edit to this one, so the
+  API refuses with a 409 instead of quietly allowing it.
 
 ## Running it locally
 
@@ -261,10 +293,15 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/medical-records` | ADMIN, DOCTOR | Record a visit (400 on dangling patient/doctor/appointment or a future visit time, 409 on a non-completed or already-documented appointment) |
 | PUT | `/api/medical-records/{id}` | ADMIN, DOCTOR | Correct a medical record; the prescription list is replaced as a whole |
 | DELETE | `/api/medical-records/{id}` | ADMIN | Delete a medical record |
+| GET | `/api/invoices?patientId=2&status=UNPAID&page=0&size=20` | ADMIN, RECEPTIONIST | List invoices, newest issued first; optional patient / status filters |
+| GET | `/api/invoices/{id}` | ADMIN, RECEPTIONIST | Get one invoice, with charge lines and derived total |
+| POST | `/api/invoices` | ADMIN, RECEPTIONIST | Issue an invoice (400 on dangling patient/appointment or a future issue date, 409 on a non-completed or already-billed appointment) |
+| PUT | `/api/invoices/{id}` | ADMIN, RECEPTIONIST | Correct an UNPAID invoice; the charge list is replaced as a whole (409 once PAID or VOID) |
+| PATCH | `/api/invoices/{id}/status` | ADMIN, RECEPTIONIST | Move through the lifecycle: UNPAID → PAID (stamps `paidAt`) or UNPAID → VOID |
+| DELETE | `/api/invoices/{id}` | ADMIN | Delete an UNPAID invoice (409 once PAID or VOID) |
 
 ## Roadmap
 
-- Billing: invoice per completed visit, payment status tracking
 - Structured allergies: replace the free-text note on the patient record with substance / reaction / severity entries
 - Dashboard: today's appointments, admission counts, department load
 
