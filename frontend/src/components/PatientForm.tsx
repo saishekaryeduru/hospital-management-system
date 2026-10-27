@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import {
+  ALLERGY_SEVERITIES,
   BLOOD_GROUPS,
   GENDERS,
+  formatAllergySeverity,
   formatBloodGroup,
+  type AllergyPayload,
+  type AllergySeverity,
   type BloodGroup,
   type Gender,
   type Patient,
@@ -13,6 +17,23 @@ interface Props {
   initial?: Patient;
   onSubmit: (payload: PatientPayload) => Promise<void>;
   onCancel: () => void;
+}
+
+interface AllergyRow {
+  substance: string;
+  reaction: string;
+  severity: AllergySeverity;
+}
+
+const EMPTY_ROW: AllergyRow = { substance: '', reaction: '', severity: 'UNKNOWN' };
+
+function rowsFrom(initial?: Patient): AllergyRow[] {
+  if (!initial || initial.allergies.length === 0) return [{ ...EMPTY_ROW }];
+  return initial.allergies.map((allergy) => ({
+    substance: allergy.substance,
+    reaction: allergy.reaction ?? '',
+    severity: allergy.severity,
+  }));
 }
 
 export default function PatientForm({ initial, onSubmit, onCancel }: Props) {
@@ -26,14 +47,28 @@ export default function PatientForm({ initial, onSubmit, onCancel }: Props) {
   const [address, setAddress] = useState(initial?.address ?? '');
   const [emergencyContactName, setEmergencyContactName] = useState(initial?.emergencyContactName ?? '');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(initial?.emergencyContactPhone ?? '');
-  const [allergies, setAllergies] = useState(initial?.allergies ?? '');
+  const [rows, setRows] = useState<AllergyRow[]>(() => rowsFrom(initial));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  function updateRow(index: number, patch: Partial<AllergyRow>) {
+    setRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    // A row left completely blank is not an allergy entry; a partly
+    // filled row is sent and the API's field errors surface here
+    // rather than the row being silently dropped.
+    const allergies: AllergyPayload[] = rows
+      .filter((row) => row.substance.trim() !== '' || row.reaction.trim() !== '')
+      .map((row) => ({
+        substance: row.substance.trim(),
+        reaction: row.reaction.trim() ? row.reaction.trim() : undefined,
+        severity: row.severity,
+      }));
     try {
       await onSubmit({
         firstName,
@@ -46,7 +81,7 @@ export default function PatientForm({ initial, onSubmit, onCancel }: Props) {
         address: address || undefined,
         emergencyContactName: emergencyContactName || undefined,
         emergencyContactPhone: emergencyContactPhone || undefined,
-        allergies: allergies || undefined,
+        allergies,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the patient.');
@@ -87,8 +122,59 @@ export default function PatientForm({ initial, onSubmit, onCancel }: Props) {
           Emergency phone
           <input value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
         </label>
-        <label>Allergies<input value={allergies} onChange={(e) => setAllergies(e.target.value)} /></label>
       </div>
+
+      <h3>Allergies</h3>
+      {rows.map((row, index) => (
+        <div className="form-grid" key={index} style={{ marginBottom: '0.5rem' }}>
+          <label>
+            Substance
+            <input
+              value={row.substance}
+              onChange={(e) => updateRow(index, { substance: e.target.value })}
+              maxLength={120}
+              placeholder="Penicillin"
+            />
+          </label>
+          <label>
+            Reaction
+            <input
+              value={row.reaction}
+              onChange={(e) => updateRow(index, { reaction: e.target.value })}
+              maxLength={200}
+              placeholder="Hives"
+            />
+          </label>
+          <label>
+            Severity
+            <select
+              value={row.severity}
+              onChange={(e) => updateRow(index, { severity: e.target.value as AllergySeverity })}
+            >
+              {ALLERGY_SEVERITIES.map((s) => (
+                <option key={s} value={s}>{formatAllergySeverity(s)}</option>
+              ))}
+            </select>
+          </label>
+          <div className="row" style={{ alignSelf: 'end' }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+            >
+              Remove allergy
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="secondary"
+        onClick={() => setRows((current) => [...current, { ...EMPTY_ROW }])}
+      >
+        Add allergy
+      </button>
+
       {error && <p className="error">{error}</p>}
       <div className="row" style={{ marginTop: '0.75rem' }}>
         <button type="submit" disabled={busy}>{initial ? 'Save changes' : 'Register patient'}</button>

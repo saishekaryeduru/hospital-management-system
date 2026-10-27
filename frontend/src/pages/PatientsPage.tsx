@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, formatBloodGroup, session, type Patient } from '../api/client';
+import { api, formatAllergySeverity, formatBloodGroup, session, type Patient } from '../api/client';
 import PatientForm from '../components/PatientForm';
 
 const PAGE_SIZE = 20;
@@ -100,7 +100,13 @@ export default function PatientsPage() {
                 <td>{p.dateOfBirth}</td>
                 <td>{formatBloodGroup(p.bloodGroup)}</td>
                 <td>{p.phone}</td>
-                <td>{p.allergies ?? '—'}</td>
+                <td>
+                  {p.allergies.length === 0
+                    ? '—'
+                    : p.allergies
+                        .map((a) => `${a.substance} (${formatAllergySeverity(a.severity)})`)
+                        .join(', ')}
+                </td>
                 <td>
                   <div className="row">
                     {canEdit && (

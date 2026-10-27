@@ -8,7 +8,9 @@ as a separate, tested module, then appointments — scheduling, overlap
 protection, and the visit lifecycle — as the next, medical records
 — the visit document itself, with diagnoses and prescriptions — after
 that, and billing — an invoice per completed visit, with payment
-tracking — as the latest module.
+tracking — after that. The patient record itself has since gained
+structured allergies: substance, reaction, and severity entries in
+place of the original free-text note.
 
 The design constraint that shapes everything here is that patient data
 is sensitive. Access is not just authenticated, it is authorized per
@@ -27,9 +29,18 @@ are different questions, and the API answers them separately.
   delete. The split is enforced in one security configuration and
   covered by integration tests (including the 403 cases).
 - **Patient registration & records** — demographics, contact details,
-  blood group, emergency contact, and a short allergies note, with
-  server-side validation (including a date-of-birth that cannot be in
-  the future) and per-field error details.
+  blood group, and emergency contact, with server-side validation
+  (including a date-of-birth that cannot be in the future) and
+  per-field error details.
+- **Structured allergies** — each allergy is an entry with a substance,
+  an optional reaction, and a severity (MILD, MODERATE, SEVERE,
+  LIFE_THREATENING, or UNKNOWN when the patient cannot grade it),
+  kept in written order on the patient record. The list is replaced
+  as a whole on update, and the same substance may not appear twice
+  on one record — two entries could carry different severities, and
+  a chart that disagrees with itself is worse than no chart. The
+  patient list shows each substance with its severity, so a severe
+  allergy is visible before a record is even opened.
 - **Search & pagination** — the patient list is paged (20 per page) and
   searchable from one box by name fragment or phone digits, which is
   how front-desk staff actually look someone up.
@@ -107,7 +118,7 @@ backend/   Spring Boot API
   ├── appointment/ appointment booking, overlap check, status lifecycle, day views
   ├── medicalrecord/ visit records with diagnoses and prescription lines
   ├── billing/     invoices with charge lines, derived totals, payment lifecycle
-  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord, Invoice) and enums (Role, Gender, BloodGroup, AppointmentStatus, InvoiceStatus)
+  ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord, Invoice), embeddables (Allergy, Prescription, ChargeItem) and enums (Role, Gender, BloodGroup, AppointmentStatus, InvoiceStatus, AllergySeverity)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
 ```
@@ -136,10 +147,18 @@ package rather than growing a shared service layer.
 - **One search box, three fields.** Front-desk lookup is by name or
   phone; the repository query matches a fragment against first name,
   last name, or phone instead of asking staff to pick a search mode.
-- **Allergies are a short free-text note, for now.** A structured
-  allergy record (substance, reaction, severity) is still on the
-  roadmap; baking a half-model into the patient table now would be
-  the wrong schema to migrate away from later.
+- **Allergies are structured entries owned by the patient.** An
+  allergy entry is never read, shared, or deleted on its own, so it
+  is an embeddable on the patient record — the same treatment
+  prescription and charge lines get — kept in written order and
+  replaced as a whole when the record is corrected. Severity is
+  always recorded, with UNKNOWN as an explicit value rather than a
+  missing one: a patient may know a substance harms them without
+  knowing how the reaction was graded. The Flyway migration follows
+  the same rule — a legacy free-text note becomes one entry with
+  that text as the substance and severity UNKNOWN, because assigning
+  it a reaction or a grade would invent clinical detail the note
+  never contained.
 - **A directory entry is not a login.** A doctor in the directory and
   a staff account with the DOCTOR role are separate records: the
   directory is who the hospital employs and how to reach them, the
@@ -270,8 +289,8 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/auth/login` | public | Log in, returns a JWT |
 | GET | `/api/patients?q=asha&page=0&size=20` | all roles | List patients, paged; optional case-insensitive search over first name, last name, phone |
 | GET | `/api/patients/{id}` | all roles | Get one patient |
-| POST | `/api/patients` | ADMIN, RECEPTIONIST | Register a patient |
-| PUT | `/api/patients/{id}` | ADMIN, RECEPTIONIST, DOCTOR, NURSE | Update a patient record |
+| POST | `/api/patients` | ADMIN, RECEPTIONIST | Register a patient, with structured allergy entries (400 on a duplicate substance) |
+| PUT | `/api/patients/{id}` | ADMIN, RECEPTIONIST, DOCTOR, NURSE | Update a patient record; the allergy list is replaced as a whole |
 | DELETE | `/api/patients/{id}` | ADMIN | Delete a patient record |
 | GET | `/api/departments` | all roles | List departments in name order, each with its doctor count |
 | POST | `/api/departments` | ADMIN | Create a department (name must be unique, case-insensitive) |
@@ -302,7 +321,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 
 ## Roadmap
 
-- Structured allergies: replace the free-text note on the patient record with substance / reaction / severity entries
 - Dashboard: today's appointments, admission counts, department load
 
 ## License

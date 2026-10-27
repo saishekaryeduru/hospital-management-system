@@ -1,17 +1,24 @@
 package com.saishekar.hospital.model;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "patients")
@@ -51,9 +58,14 @@ public class Patient {
     @Column(name = "emergency_contact_phone")
     private String emergencyContactPhone;
 
-    // Free-text clinical note kept short at the API layer; structured
-    // allergy records belong with the medical-record module.
-    private String allergies;
+    // Structured allergy entries keep the order they were written in;
+    // the list is replaced as a whole when the record is corrected, so
+    // an allergy a patient no longer reports actually leaves the chart.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "patient_allergies",
+            joinColumns = @JoinColumn(name = "patient_id"))
+    @OrderColumn(name = "line_order")
+    private List<Allergy> allergies = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
@@ -66,14 +78,14 @@ public class Patient {
 
     public Patient(String firstName, String lastName, LocalDate dateOfBirth, Gender gender,
                    String phone, String email, BloodGroup bloodGroup, String address,
-                   String emergencyContactName, String emergencyContactPhone, String allergies) {
+                   String emergencyContactName, String emergencyContactPhone, List<Allergy> allergies) {
         apply(firstName, lastName, dateOfBirth, gender, phone, email, bloodGroup, address,
                 emergencyContactName, emergencyContactPhone, allergies);
     }
 
     public void apply(String firstName, String lastName, LocalDate dateOfBirth, Gender gender,
                       String phone, String email, BloodGroup bloodGroup, String address,
-                      String emergencyContactName, String emergencyContactPhone, String allergies) {
+                      String emergencyContactName, String emergencyContactPhone, List<Allergy> allergies) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.dateOfBirth = dateOfBirth;
@@ -84,7 +96,7 @@ public class Patient {
         this.address = address;
         this.emergencyContactName = emergencyContactName;
         this.emergencyContactPhone = emergencyContactPhone;
-        this.allergies = allergies;
+        this.allergies = allergies == null ? new ArrayList<>() : new ArrayList<>(allergies);
     }
 
     @PreUpdate
@@ -103,7 +115,7 @@ public class Patient {
     public String getAddress() { return address; }
     public String getEmergencyContactName() { return emergencyContactName; }
     public String getEmergencyContactPhone() { return emergencyContactPhone; }
-    public String getAllergies() { return allergies; }
+    public List<Allergy> getAllergies() { return allergies; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

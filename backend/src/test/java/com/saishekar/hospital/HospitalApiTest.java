@@ -40,7 +40,8 @@ class HospitalApiTest {
                 + "\"dateOfBirth\":\"1990-04-12\",\"gender\":\"FEMALE\",\"phone\":\"555-0101\","
                 + "\"email\":\"asha@example.com\",\"bloodGroup\":\"O_POSITIVE\","
                 + "\"address\":\"12 Lake Ave\",\"emergencyContactName\":\"Ravi Sharma\","
-                + "\"emergencyContactPhone\":\"555-0102\",\"allergies\":\"Penicillin\"}";
+                + "\"emergencyContactPhone\":\"555-0102\","
+                + "\"allergies\":[{\"substance\":\"Penicillin\",\"reaction\":\"Hives\",\"severity\":\"MODERATE\"}]}";
     }
 
     @Test
@@ -54,6 +55,8 @@ class HospitalApiTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.firstName").value("Ashwini"))
                 .andExpect(jsonPath("$.bloodGroup").value("O_POSITIVE"))
+                .andExpect(jsonPath("$.allergies[0].substance").value("Penicillin"))
+                .andExpect(jsonPath("$.allergies[0].severity").value("MODERATE"))
                 .andReturn();
         long id = json.readTree(created.getResponse().getContentAsString()).get("id").asLong();
 

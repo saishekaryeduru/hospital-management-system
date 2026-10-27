@@ -22,6 +22,30 @@ export function formatBloodGroup(group: BloodGroup): string {
   return group.replace('_POSITIVE', '+').replace('_NEGATIVE', '-');
 }
 
+export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING' | 'UNKNOWN';
+export const ALLERGY_SEVERITIES: AllergySeverity[] = [
+  'MILD', 'MODERATE', 'SEVERE', 'LIFE_THREATENING', 'UNKNOWN',
+];
+
+export function formatAllergySeverity(severity: AllergySeverity): string {
+  return severity
+    .toLowerCase()
+    .replace(/(^|_)(\w)/g, (_match, _sep: string, ch: string) => ` ${ch.toUpperCase()}`)
+    .trim();
+}
+
+export interface Allergy {
+  substance: string;
+  reaction: string | null;
+  severity: AllergySeverity;
+}
+
+export interface AllergyPayload {
+  substance: string;
+  reaction?: string;
+  severity: AllergySeverity;
+}
+
 export interface Patient {
   id: number;
   firstName: string;
@@ -34,7 +58,7 @@ export interface Patient {
   address: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
-  allergies: string | null;
+  allergies: Allergy[];
 }
 
 export interface PatientPayload {
@@ -48,7 +72,7 @@ export interface PatientPayload {
   address?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
-  allergies?: string;
+  allergies?: AllergyPayload[];
 }
 
 export interface PatientPage {

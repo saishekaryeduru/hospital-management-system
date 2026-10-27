@@ -1,12 +1,17 @@
 package com.saishekar.hospital.patient;
 
 import com.saishekar.hospital.common.ApiException;
+import com.saishekar.hospital.model.Allergy;
 import com.saishekar.hospital.model.Patient;
 import com.saishekar.hospital.repository.PatientRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -41,7 +46,7 @@ public class PatientService {
     public PatientDtos.PatientResponse create(PatientDtos.PatientRequest req) {
         var patient = new Patient(req.firstName(), req.lastName(), req.dateOfBirth(), req.gender(),
                 req.phone(), req.email(), req.bloodGroup(), req.address(),
-                req.emergencyContactName(), req.emergencyContactPhone(), req.allergies());
+                req.emergencyContactName(), req.emergencyContactPhone(), allergiesOf(req));
         return PatientDtos.PatientResponse.from(patients.save(patient));
     }
 
@@ -49,12 +54,32 @@ public class PatientService {
         var patient = find(id);
         patient.apply(req.firstName(), req.lastName(), req.dateOfBirth(), req.gender(),
                 req.phone(), req.email(), req.bloodGroup(), req.address(),
-                req.emergencyContactName(), req.emergencyContactPhone(), req.allergies());
+                req.emergencyContactName(), req.emergencyContactPhone(), allergiesOf(req));
         return PatientDtos.PatientResponse.from(patients.save(patient));
     }
 
     public void delete(Long id) {
         patients.delete(find(id));
+    }
+
+    // One entry per substance: two rows for the same substance could
+    // carry different severities, and a chart that disagrees with
+    // itself about an allergy is worse than no chart. The comparison
+    // ignores case and surrounding whitespace, because "Penicillin"
+    // and " penicillin " are the same substance at the desk.
+    private List<Allergy> allergiesOf(PatientDtos.PatientRequest req) {
+        if (req.allergies() == null) {
+            return List.of();
+        }
+        var seen = new HashSet<String>();
+        for (var allergy : req.allergies()) {
+            var substance = allergy.substance().trim().toLowerCase(Locale.ROOT);
+            if (!seen.add(substance)) {
+                throw ApiException.badRequest(
+                        "allergies contains a duplicate substance: " + allergy.substance().trim());
+            }
+        }
+        return req.allergies().stream().map(PatientDtos.AllergyRequest::toAllergy).toList();
     }
 
     private Patient find(Long id) {
