@@ -27,7 +27,10 @@ public final class AppointmentDtos {
                                       Long departmentId, String departmentName,
                                       Instant startsAt, int durationMinutes, Instant endsAt,
                                       String reason, AppointmentStatus status) {
-        static AppointmentResponse from(Appointment a) {
+        // Public, unlike the other modules' factories: the dashboard's
+        // day list reuses this exact shape, and an appointment should
+        // be mapped to a response in exactly one place.
+        public static AppointmentResponse from(Appointment a) {
             var patient = a.getPatient();
             var doctor = a.getDoctor();
             return new AppointmentResponse(a.getId(),
