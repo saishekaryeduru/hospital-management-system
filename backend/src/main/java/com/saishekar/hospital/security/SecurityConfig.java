@@ -33,6 +33,9 @@ public class SecurityConfig {
     // so clinical roles (DOCTOR, NURSE) are excluded from every method
     // on it, and the front desk that issues and settles invoices --
     // ADMIN and RECEPTIONIST -- is the whole audience.
+    // The dashboard aggregates scheduling, directory, and registration
+    // data only -- no diagnoses, no charges -- so every role that can
+    // read the schedule can read it.
     // Rules live here, in one place, rather than scattered across
     // controllers.
     @Bean
@@ -41,7 +44,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**", "/api/appointments/**")
+                        .requestMatchers(HttpMethod.GET, "/api/patients/**", "/api/doctors/**", "/api/departments/**", "/api/appointments/**", "/api/dashboard/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST")
                         .requestMatchers(HttpMethod.GET, "/api/medical-records/**")
                             .hasAnyRole("ADMIN", "DOCTOR", "NURSE")

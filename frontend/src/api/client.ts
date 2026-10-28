@@ -274,6 +274,26 @@ export interface InvoicePage {
   totalPages: number;
 }
 
+export interface DepartmentLoad {
+  departmentId: number;
+  departmentName: string;
+  doctorCount: number;
+  activeDoctorCount: number;
+  appointments: number;
+  completed: number;
+  bookedMinutes: number;
+}
+
+export interface Dashboard {
+  date: string;
+  appointmentsTotal: number;
+  appointmentsByStatus: Record<AppointmentStatus, number>;
+  appointments: Appointment[];
+  patientsTotal: number;
+  patientsRegistered: number;
+  departmentLoad: DepartmentLoad[];
+}
+
 export interface AuthResponse {
   token: string;
   email: string;
@@ -460,4 +480,11 @@ export const api = {
 
   deleteInvoice: (id: number) =>
     request<void>(`/api/invoices/${id}`, { method: 'DELETE' }),
+
+  getDashboard: (date?: string) => {
+    const search = new URLSearchParams();
+    if (date) search.set('date', date);
+    const query = search.toString();
+    return request<Dashboard>(query ? `/api/dashboard?${query}` : '/api/dashboard');
+  },
 };

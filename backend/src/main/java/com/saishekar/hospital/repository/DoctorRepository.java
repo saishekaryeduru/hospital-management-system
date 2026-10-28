@@ -15,6 +15,8 @@ public interface DoctorRepository extends JpaRepository<Doctor, Long> {
 
     long countByDepartmentId(Long departmentId);
 
+    long countByDepartmentIdAndActiveTrue(Long departmentId);
+
     Page<Doctor> findByDepartmentId(Long departmentId, Pageable pageable);
 
     // Directory lookup mirrors the patient search: one box matches a name

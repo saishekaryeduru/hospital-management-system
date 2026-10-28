@@ -10,7 +10,9 @@ protection, and the visit lifecycle — as the next, medical records
 that, and billing — an invoice per completed visit, with payment
 tracking — after that. The patient record itself has since gained
 structured allergies: substance, reaction, and severity entries in
-place of the original free-text note.
+place of the original free-text note. A dashboard closes the set:
+one day's appointments, registrations, and department load in a
+single view.
 
 The design constraint that shapes everything here is that patient data
 is sensitive. Access is not just authenticated, it is authorized per
@@ -89,6 +91,16 @@ are different questions, and the API answers them separately.
   roles cannot read a charge at all. The list is paged, newest issued
   first, filterable by patient and status, so the unpaid queue is one
   filter away.
+- **Dashboard** — one view of a day: the day's appointments in time
+  order with counts by status, how many patients were registered
+  that day (and how many are on record in total), and each
+  department's load — doctors on the directory, how many can take
+  bookings, appointments and completions for the day, and booked
+  time (scheduled, checked-in, and completed visits; a cancelled
+  slot is a gap, not load). Any day can be viewed; the default is
+  today. The aggregates cover scheduling, directory, and
+  registration data only — no diagnoses and no charges — so every
+  staff role can read them.
 - **Consistent API errors** — one JSON error shape everywhere, with
   per-field details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API,
@@ -118,6 +130,7 @@ backend/   Spring Boot API
   ├── appointment/ appointment booking, overlap check, status lifecycle, day views
   ├── medicalrecord/ visit records with diagnoses and prescription lines
   ├── billing/     invoices with charge lines, derived totals, payment lifecycle
+  ├── dashboard/   one day's appointments, registrations, and department load
   ├── model/       JPA entities (User, Patient, Department, Doctor, Appointment, MedicalRecord, Invoice), embeddables (Allergy, Prescription, ChargeItem) and enums (Role, Gender, BloodGroup, AppointmentStatus, InvoiceStatus, AllergySeverity)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
@@ -228,6 +241,19 @@ package rather than growing a shared service layer.
   fact. Unwinding either outcome in a real billing office is a new
   document — a refund, a reissue — not an edit to this one, so the
   API refuses with a 409 instead of quietly allowing it.
+- **The dashboard is computed from the rows it lists.** The day's
+  appointments are loaded once, in start order, and the status
+  counts and department load are tallied from that same list, so a
+  number on the dashboard can never disagree with the schedule
+  beneath it. The day is the UTC day the appointment day view uses,
+  for the same reason. Registrations are counted from the patient
+  record's creation time: this system registers outpatients rather
+  than admitting inpatients, so the honest intake figure for a day
+  is how many patients were registered on it — calling it an
+  admission count would claim a ward workflow that does not exist
+  yet. Department load counts a cancelled or no-show slot as no
+  load at all: the time is free again, and presenting it as load
+  would overstate how full the department's day is.
 
 ## Running it locally
 
@@ -312,6 +338,7 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/medical-records` | ADMIN, DOCTOR | Record a visit (400 on dangling patient/doctor/appointment or a future visit time, 409 on a non-completed or already-documented appointment) |
 | PUT | `/api/medical-records/{id}` | ADMIN, DOCTOR | Correct a medical record; the prescription list is replaced as a whole |
 | DELETE | `/api/medical-records/{id}` | ADMIN | Delete a medical record |
+| GET | `/api/dashboard?date=2026-11-02` | all roles | One day (default: today, UTC): appointments in time order with counts by status, patients registered that day and in total, and per-department load (doctors, appointments, completions, booked minutes) |
 | GET | `/api/invoices?patientId=2&status=UNPAID&page=0&size=20` | ADMIN, RECEPTIONIST | List invoices, newest issued first; optional patient / status filters |
 | GET | `/api/invoices/{id}` | ADMIN, RECEPTIONIST | Get one invoice, with charge lines and derived total |
 | POST | `/api/invoices` | ADMIN, RECEPTIONIST | Issue an invoice (400 on dangling patient/appointment or a future issue date, 409 on a non-completed or already-billed appointment) |
@@ -321,7 +348,10 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 
 ## Roadmap
 
-- Dashboard: today's appointments, admission counts, department load
+- Inpatient admissions: wards, beds, and an admission/discharge
+  lifecycle (the dashboard's registration count is the outpatient
+  intake figure until then)
+- Appointment reminders for patients ahead of a booked visit
 
 ## License
 

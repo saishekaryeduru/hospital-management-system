@@ -49,4 +49,14 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
                                              @Param("statuses") Collection<AppointmentStatus> statuses,
                                              @Param("windowStart") Instant windowStart,
                                              @Param("windowEnd") Instant windowEnd);
+
+    // The dashboard reads one whole day at once: every appointment in
+    // the half-open range, in start order, so the summary counts and
+    // the list it returns are computed from the same rows.
+    @Query("""
+            select a from Appointment a
+            where a.startsAt >= :from and a.startsAt < :to
+            order by a.startsAt asc, a.id asc
+            """)
+    List<Appointment> findInRange(@Param("from") Instant from, @Param("to") Instant to);
 }

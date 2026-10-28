@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { session } from './api/client';
 import AppointmentsPage from './pages/AppointmentsPage';
 import BillingPage from './pages/BillingPage';
+import DashboardPage from './pages/DashboardPage';
 import DoctorsPage from './pages/DoctorsPage';
 import LoginPage from './pages/LoginPage';
 import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import PatientsPage from './pages/PatientsPage';
 
-type View = 'patients' | 'doctors' | 'appointments' | 'records' | 'billing';
+type View = 'dashboard' | 'patients' | 'doctors' | 'appointments' | 'records' | 'billing';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean>(() => Boolean(session.token()));
-  const [view, setView] = useState<View>('patients');
+  const [view, setView] = useState<View>('dashboard');
 
   if (!loggedIn) {
     return <LoginPage onLoggedIn={() => setLoggedIn(true)} />;
@@ -35,6 +36,9 @@ export default function App() {
         </div>
       </header>
       <nav className="row" style={{ marginBottom: '0.5rem' }}>
+        <button className={view === 'dashboard' ? undefined : 'secondary'} onClick={() => setView('dashboard')}>
+          Dashboard
+        </button>
         <button className={view === 'patients' ? undefined : 'secondary'} onClick={() => setView('patients')}>
           Patients
         </button>
@@ -60,6 +64,7 @@ export default function App() {
         )}
       </nav>
       <main>
+        {view === 'dashboard' && <DashboardPage />}
         {view === 'patients' && <PatientsPage />}
         {view === 'doctors' && <DoctorsPage />}
         {view === 'appointments' && <AppointmentsPage />}

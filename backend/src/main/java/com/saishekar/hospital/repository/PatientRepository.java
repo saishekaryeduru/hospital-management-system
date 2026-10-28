@@ -18,4 +18,8 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
                or p.phone like concat('%', :q, '%')
             """)
     Page<Patient> search(@Param("q") String q, Pageable pageable);
+
+    // Registrations in a half-open instant range; the dashboard passes
+    // one UTC day, matching the day boundary appointments use.
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(java.time.Instant from, java.time.Instant to);
 }
